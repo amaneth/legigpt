@@ -69,9 +69,6 @@ In terms of Requests for Proposals (RFPs), one could anticipate focus areas incl
 
 Favorable project categories for funding would likely include health infrastructure construction and renovation, health services program expansion, community preventive health activities aimed at reducing chronic disease rates and health disparities, and professional development in the health sector. Projects that address social determinants of health, disparities in health access and outcomes, and those focusing on prevention would also be prioritized.
 '''
-with open('funding_summary.txt', 'r') as file:
-    # Read the content of the file
-    funding_summary_sample = file.read()
 
 
 
