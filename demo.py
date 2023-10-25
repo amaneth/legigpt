@@ -17,6 +17,8 @@ from io import StringIO
 import re
 import pickle
 from PyPDF2 import PdfReader
+import logging
+logging.basicConfig(level=logging.DEBUG) 
 
 load_dotenv()
 # Set your OpenAI API key here
@@ -249,7 +251,7 @@ def main():
         if os.path.isfile(file_path):
             with open(file_path, 'r') as file:
                 funding_summary = file.read()
-            print('summary already in the disk')
+            logging.info('summary already in the disk')
         else:
             #stringio = StringIO(uploaded_file.getvalue().decode("latin-1"))
             #leg_text = stringio.read()
@@ -271,7 +273,7 @@ def main():
     if funding_summary is not None: 
         if user_query := st.chat_input("What is up?") :
             # Display user message in chat message container
-            print(user_query)
+            logging.info(user_query)
             st.chat_message("user").markdown(user_query)
             # Add user message to chat history
             st.session_state.messages.append({"role": "user", "content": user_query})
