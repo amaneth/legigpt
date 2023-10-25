@@ -246,7 +246,7 @@ def main():
         file_name = uploaded_file.name
         namespace = file_name.split('.')[0]
         file_path = os.path.join(folder_name, namespace+'.smry')
-        logging.info(namespace, file_name)
+        logging.info(namespace+'-'+file_name)
 
         if os.path.isfile(file_path):
             with open(file_path, 'r') as file:
