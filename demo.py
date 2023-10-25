@@ -251,7 +251,7 @@ def main():
         if os.path.isfile(file_path):
             with open(file_path, 'r') as file:
                 funding_summary = file.read()
-            logging.info('summary already in the disk')
+            logging.info('summary already in the disk, loaded summary:'+file_path+', size:'+len(funding_summary))
         else:
             #stringio = StringIO(uploaded_file.getvalue().decode("latin-1"))
             #leg_text = stringio.read()
