@@ -18,7 +18,7 @@ import re
 import pickle
 from PyPDF2 import PdfReader
 import logging
-logging.basicConfig(level=logging.DEBUG) 
+logging.basicConfig(level=logging.INFO) 
 
 load_dotenv()
 # Set your OpenAI API key here
@@ -246,7 +246,7 @@ def main():
         file_name = uploaded_file.name
         namespace = file_name.split('.')[0]
         file_path = os.path.join(folder_name, namespace+'.smry')
-        print(namespace, file_name)
+        logging.info(namespace, file_name)
 
         if os.path.isfile(file_path):
             with open(file_path, 'r') as file:
@@ -257,7 +257,7 @@ def main():
             #leg_text = stringio.read()
             sections = chunk_by_section('../data/'+file_name)
 
-            print('length of sections selcted', len(sections))
+            logging.info('length of sections selcted', len(sections))
 
             with open('hyde_embedding.pkl', 'rb') as f:
                 hyde_embed = pickle.load(f)
