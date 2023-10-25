@@ -20,10 +20,10 @@ from PyPDF2 import PdfReader
 
 load_dotenv()
 # Set your OpenAI API key here
-openai.api_key = os.getenv("OPENAI_API_KEY")
+openai.api_key = st.secrets['OPENAI_API_KEY']
 
-OPENAI_API_KEY =  os.getenv("OPENAI_API_KEY")
-PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
+OPENAI_API_KEY =  st.secrets['OPENAI_API_KEY']
+PINECONE_API_KEY = st.secrets["PINECONE_API_KEY"]
 
 
 model_name = 'text-embedding-ada-002'
