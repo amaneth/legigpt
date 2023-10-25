@@ -269,6 +269,9 @@ def main():
             funding_summary = chunk_summary(similar_docs, namespace)
         #funding_summary = funding_summary_sample
 
+    else:
+        logging.info('upload file is none')
+
     # React to user input
     if funding_summary is not None: 
         if user_query := st.chat_input("What is up?") :
@@ -289,6 +292,9 @@ def main():
                 st.markdown(response)
             # Add assistant response to chat history
             st.session_state.messages.append({"role": "assistant", "content": response})
+
+    else:
+        logging.info('funding summary is None')
 
     #    if user_query:
             #st.text("ChatGPT:")
