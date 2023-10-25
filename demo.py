@@ -19,6 +19,7 @@ import pickle
 from PyPDF2 import PdfReader
 import logging
 logging.basicConfig(level=logging.INFO) 
+import io
 
 load_dotenv()
 # Set your OpenAI API key here
@@ -108,6 +109,8 @@ def extract_text_from_pdf(pdf_file_path):
     for page in pdf_reader.pages:
         text += page.extract_text()
     return text
+
+
 
 def chunk_by_section(document):
     token_limit = 6000
@@ -254,11 +257,14 @@ def main():
                 funding_summary = file.read()
             logging.info('summary already in the disk, loaded summary:'+file_path+', size:'+str(len(funding_summary)))
         else:
+            pdf_file = io.BytesIO(uploaded_file.getvalue())
+            pdf_reader = PdfReader(pdf_file)
             #stringio = StringIO(uploaded_file.getvalue().decode("latin-1"))
-            #leg_text = stringio.read()
-            sections = chunk_by_section('../data/'+file_name)
+            #leg_text = uploaded_file.getvalue().decode("utf-8", errors='ignore')
+            #sections = chunk_by_section('../data/'+file_name)
+            sections = chunk_by_section(pdf_file)
 
-            logging.info('length of sections selcted', len(sections))
+            #logging.info('length of sections selcted:'+str(len(sections))+' '+sections[0])
 
             with open('hyde_embedding.pkl', 'rb') as f:
                 hyde_embed = pickle.load(f)
