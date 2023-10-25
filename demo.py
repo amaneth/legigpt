@@ -239,9 +239,10 @@ def main():
     
     folder_name = 'summary'
 
-    uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
+    uploaded_file = st.file_uploader("Choose a PDF file", type="pdf", accept_multiple_files=True)
 
     if uploaded_file is not None:
+        uploaded_file = uploaded_file[0]
 
         st.session_state.messages = []
         file_name = uploaded_file.name
