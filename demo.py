@@ -224,7 +224,6 @@ def main():
 
     st.markdown("# LegiGPT⚖️ ")
     
-    uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
 
 
     #st.title("LegiGPT")
@@ -239,6 +238,8 @@ def main():
     funding_summary = None
     
     folder_name = 'summary'
+
+    uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
 
     if uploaded_file is not None:
 
