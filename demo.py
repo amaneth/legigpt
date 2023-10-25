@@ -268,7 +268,7 @@ def main():
             similar_query = 'Give me a funding prediction and analysis for various health related agencies' 
             similar_docs = get_similiar_docs(similar_query, namespace, k=45)
             funding_summary = chunk_summary(similar_docs, namespace)
-            uploaded_file = None
+        uploaded_file = None
         #funding_summary = funding_summary_sample
 
     else:
