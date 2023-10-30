@@ -227,11 +227,14 @@ def main():
 
     st.markdown("# LegiGPT⚖️ ")
     
+    with st.sidebar:
+        uploaded_file = st.file_uploader("Choose a PDF file", type="pdf", accept_multiple_files=False)
+        depth = st.selectbox('Choose depth of analysis', ('Memory', 'Lighter', 'Medium', 'Extensive'))
 
 
     #st.title("LegiGPT")
     if "messages" not in st.session_state:
-        st.session_state.messages = []
+        st.session_state["messages"] = [{"role": "assistant", "content": "Hello! How may I assist you today with funding predictions, analysis, and insights?"}] 
 
     # Display chat messages from history on app rerun
     for message in st.session_state.messages:
@@ -242,7 +245,6 @@ def main():
     
     folder_name = 'summary'
 
-    uploaded_file = st.file_uploader("Choose a PDF file", type="pdf", accept_multiple_files=False)
 
     if uploaded_file is not None:
 
@@ -281,25 +283,24 @@ def main():
         logging.info('upload file is none')
 
     # React to user input
-    if funding_summary is not None: 
-        if user_query := st.chat_input("What is up?") :
-            # Display user message in chat message container
-            logging.info(user_query)
-            st.chat_message("user").markdown(user_query)
-            # Add user message to chat history
-            st.session_state.messages.append({"role": "user", "content": user_query})
+    if user_query := st.chat_input("What is up?", disabled = not funding_summary) :
+        # Display user message in chat message container
+        logging.info(user_query)
+        st.chat_message("user").markdown(user_query)
+        # Add user message to chat history
+        st.session_state.messages.append({"role": "user", "content": user_query})
 
-            
-            input_prompt = task_info + user_query
-            response = get_answer(input_prompt, funding_summary)
+        
+        input_prompt = task_info + user_query
+        response = get_answer(input_prompt, funding_summary)
 
 
-            #response = sample_response
-            # Display assistant response in chat message container
-            with st.chat_message("assistant"):
-                st.markdown(response)
-            # Add assistant response to chat history
-            st.session_state.messages.append({"role": "assistant", "content": response})
+        #response = sample_response
+        # Display assistant response in chat message container
+        with st.chat_message("assistant"):
+            st.markdown(response)
+        # Add assistant response to chat history
+        st.session_state.messages.append({"role": "assistant", "content": response})
 
     else:
         logging.info('funding summary is None')
