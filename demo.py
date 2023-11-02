@@ -190,7 +190,7 @@ def chunk_summary(docs, namespace):
     return summary
 
 
-def get_similiar_docs(query, namespace, k=9, score=False):
+def get_similiar_docs(vectorstore, query, namespace, k=9, score=False):
   if score:
     similar_docs = vectorstore.similarity_search_with_score(query, k=k, namespace=namespace)
   else:
@@ -204,6 +204,41 @@ def get_answer(query, context):
   answer = qa_chain.run(input_documents=[context_doc], question=query)
   return answer
 
+
+def get_funding_info(uploaded_file, file_path, namespace, query, depth):
+
+    depth_value = {'Light':3, 'Medium':15, 'Extensive':45}
+    if depth=='Memory':
+        with open(file_path, 'r') as file:
+            funding_summary = file.read()
+        logging.info('summary already in the disk, loaded summary:'+file_path+', size:'+str(len(funding_summary)))
+    else:
+        index = pinecone.Index(index_name)
+        with open('hyde_embedding.pkl', 'rb') as f:
+            hyde_embed = pickle.load(f)
+
+        if namespace not in index.describe_index_stats()['namespaces']:
+            pdf_file = io.BytesIO(uploaded_file.getvalue())
+            pdf_reader = PdfReader(pdf_file)
+            #stringio = StringIO(uploaded_file.getvalue().decode("latin-1"))
+            #leg_text = uploaded_file.getvalue().decode("utf-8", errors='ignore')
+            #sections = chunk_by_section('../data/'+file_name)
+            sections = chunk_by_section(pdf_file)
+
+            #logging.info('length of sections selcted:'+str(len(sections))+' '+sections[0])
+
+
+            vectorstore = Pinecone.from_texts(sections, hyde_embed, index_name=index_name, namespace=namespace)
+
+        else:
+            vectorstore = Pinecone(index, hyde_embed.embed_query, text_field)
+
+        #similar_query = 'Give me a funding prediction and analysis for various health related agencies' 
+        print('Doing analysis with:'+depth)
+        similar_docs = get_similiar_docs(vectorstore, query, namespace, k=depth_value[depth])
+        funding_summary = chunk_summary(similar_docs, namespace)
+
+    return funding_summary
 
 def main():
     '''    st.set_page_config(
@@ -227,13 +262,16 @@ def main():
 
     st.markdown("# LegiGPT⚖️ ")
     
+    options = ( 'Light', 'Medium', 'Extensive')
     with st.sidebar:
         uploaded_file = st.file_uploader("Choose a PDF file", type="pdf", accept_multiple_files=False)
-        depth = st.selectbox('Choose depth of analysis', ('Memory', 'Lighter', 'Medium', 'Extensive'))
+        selectbox_placeholder = st.empty()
+        depth = selectbox_placeholder.selectbox('Choose depth of analysis', options)
 
 
     #st.title("LegiGPT")
-    if "messages" not in st.session_state:
+
+    if "messages" not in st.session_state or len(st.session_state["messages"])==0:
         st.session_state["messages"] = [{"role": "assistant", "content": "Hello! How may I assist you today with funding predictions, analysis, and insights?"}] 
 
     # Display chat messages from history on app rerun
@@ -246,6 +284,8 @@ def main():
     folder_name = 'summary'
 
 
+
+
     if uploaded_file is not None:
 
         st.session_state.messages = []
@@ -255,27 +295,8 @@ def main():
         logging.info(namespace+'-'+file_name)
 
         if os.path.isfile(file_path):
-            with open(file_path, 'r') as file:
-                funding_summary = file.read()
-            logging.info('summary already in the disk, loaded summary:'+file_path+', size:'+str(len(funding_summary)))
-        else:
-            pdf_file = io.BytesIO(uploaded_file.getvalue())
-            pdf_reader = PdfReader(pdf_file)
-            #stringio = StringIO(uploaded_file.getvalue().decode("latin-1"))
-            #leg_text = uploaded_file.getvalue().decode("utf-8", errors='ignore')
-            #sections = chunk_by_section('../data/'+file_name)
-            sections = chunk_by_section(pdf_file)
-
-            #logging.info('length of sections selcted:'+str(len(sections))+' '+sections[0])
-
-            with open('hyde_embedding.pkl', 'rb') as f:
-                hyde_embed = pickle.load(f)
-
-            vectorstore = Pinecone.from_texts(sections, hyde_embed, index_name=index_name, namespace=namespace)
-
-            similar_query = 'Give me a funding prediction and analysis for various health related agencies' 
-            similar_docs = get_similiar_docs(similar_query, namespace, k=45)
-            funding_summary = chunk_summary(similar_docs, namespace)
+            options = ('Memory', 'Light', 'Medium', 'Extensive')    
+            depth = selectbox_placeholder.selectbox('Choose depth of analysis', options)
         #uploaded_file = None
         #funding_summary = funding_summary_sample
 
@@ -283,14 +304,14 @@ def main():
         logging.info('upload file is none')
 
     # React to user input
-    if user_query := st.chat_input("What is up?", disabled = not funding_summary) :
+    if user_query := st.chat_input("What is up?", disabled = not uploaded_file) :
         # Display user message in chat message container
         logging.info(user_query)
         st.chat_message("user").markdown(user_query)
         # Add user message to chat history
         st.session_state.messages.append({"role": "user", "content": user_query})
 
-        
+        funding_summary = get_funding_info(uploaded_file, file_path, namespace, user_query, depth) 
         input_prompt = task_info + user_query
         response = get_answer(input_prompt, funding_summary)
 
