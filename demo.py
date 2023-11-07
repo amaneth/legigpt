@@ -37,7 +37,7 @@ embed = OpenAIEmbeddings(
 )
 
 
-model_name = "gpt-4"
+model_name = "gpt-4-32k"
 llm = OpenAI(model_name=model_name)
 
 qa_chain = load_qa_chain(llm, chain_type="stuff")
