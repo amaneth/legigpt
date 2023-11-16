@@ -1,6 +1,7 @@
 import streamlit as st
 import openai
 import os
+import time
 from dotenv import load_dotenv
 
 import pinecone
@@ -282,6 +283,20 @@ def main():
     
     folder_name = 'summary'
 
+    analysis_prompt_template = """You are giving funding predictions for various agencies, insights and analysis on the funding-related 
+    entities and trends based on the documents provided.
+    The documents include information on government agency budgets, 
+    grant allocations, and financial reports. Answer the following question:{question}
+    The following were your previous responses, continue from where you left off...:
+    "{previous}"
+    """
+    analysis_prompt = PromptTemplate(input_variables=["question","previous"], template=analysis_prompt_template)
+    detail = 3
+    
+    question_prompt_template = """Q: {question}
+    classify the question either specific or broad. only respond either 'broad' or 'specific' only"""
+
+    question_prompt = PromptTemplate(input_variables=["question"], template=question_prompt_template)
 
 
 
@@ -311,16 +326,45 @@ def main():
         st.session_state.messages.append({"role": "user", "content": user_query})
 
         funding_summary = get_funding_info(uploaded_file, file_path, namespace, user_query, depth) 
-        input_prompt = task_info + user_query
-        response = get_answer(input_prompt, funding_summary)
+        
+        initial_question = task_info + user_query
 
+        question_type = analysing_model(question_prompt.format(question=user_query)).lower() 
 
-        #response = sample_response
-        # Display assistant response in chat message container
-        with st.chat_message("assistant"):
-            st.markdown(response)
-        # Add assistant response to chat history
-        st.session_state.messages.append({"role": "assistant", "content": response})
+        logging.info("The Question type is:"+question_type)
+
+        sample_response = 'SAMPLE RESPONSE'
+
+        if question_type == 'specific':
+            #final_response = get_answer(input_prompt, funding_summary)
+            final_response = sample_response
+            with st.chat_message("assistant"):
+                st.markdown(final_response)
+
+        else:
+            responses = []
+            for i in range(detail):
+                if not responses:
+                    #print('initial')
+                    response = get_answer(initial_question, funding_summary)
+                    #response = sample_response
+                    with st.chat_message("assistant"):
+                        st.markdown(response)
+                else:
+                    previous_response='\n'.join(responses)
+                    input_prompt = analysis_prompt.format(question=user_query, previous=previous_response)
+                    #print(input_prompt)
+                    st.write('loading...')
+                    #time.sleep(5)
+                    response = get_answer(input_prompt, funding_summary)
+                    #response = sample_response+'-'+str(i)
+                    st.markdown(response)
+
+                responses.append(response)
+
+            final_response = '\n'.join(responses)
+
+        st.session_state.messages.append({"role": "assistant", "content": final_response})
 
     else:
         logging.info('funding summary is None')
