@@ -336,8 +336,8 @@ def main():
         sample_response = 'SAMPLE RESPONSE'
 
         if question_type == 'specific':
-            #final_response = get_answer(input_prompt, funding_summary)
-            final_response = sample_response
+            final_response = get_answer(input_prompt, funding_summary)
+            #final_response = sample_response
             with st.chat_message("assistant"):
                 st.markdown(final_response)
 
