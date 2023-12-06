@@ -99,6 +99,7 @@ def extract_text_from_pdf(pdf_file_path):
 
 
 def chunk_by_section(document):
+    print('chunking...')
     text = extract_text_from_pdf(document)
     # Define a regular expression pattern to match section headers
     section_pattern = re.compile(r'SEC\.')
@@ -219,7 +220,7 @@ def get_funding_info(uploaded_file, file_path, namespace, query, depth):
 
         if namespace not in index.describe_index_stats()['namespaces']:
             pdf_file = io.BytesIO(uploaded_file.getvalue())
-            pdf_reader = PdfReader(pdf_file)
+            # pdf_reader = PdfReader(pdf_file)
             #stringio = StringIO(uploaded_file.getvalue().decode("latin-1"))
             #leg_text = uploaded_file.getvalue().decode("utf-8", errors='ignore')
             #sections = chunk_by_section('../data/'+file_name)
@@ -231,7 +232,7 @@ def get_funding_info(uploaded_file, file_path, namespace, query, depth):
             vectorstore = Pinecone.from_texts(sections, hyde_embed, index_name=index_name, namespace=namespace)
 
         else:
-            vectorstore = Pinecone(index, embed.embed_query, text_field)
+            vectorstore = Pinecone(index, hyde_embed.embed_query, text_field)
 
         #similar_query = 'Give me a funding prediction and analysis for various health related agencies' 
         print('Doing analysis with:'+depth)
@@ -326,8 +327,10 @@ def main():
         st.session_state.messages.append({"role": "user", "content": user_query})
 
         funding_summary = get_funding_info(uploaded_file, file_path, namespace, user_query, depth) 
+
+        problem_nature = 'Due to the extensive nature of the information, the response you will give here will be just the first part, \
+         you\'ll continue from where you left off in the next response '
         
-        initial_question = task_info + user_query
 
         question_type = analysing_model(question_prompt.format(question=user_query)).lower() 
 
@@ -336,6 +339,7 @@ def main():
         sample_response = 'SAMPLE RESPONSE'
 
         if question_type == 'specific':
+            input_prompt = task_info + user_query
             final_response = get_answer(input_prompt, funding_summary)
             #final_response = sample_response
             with st.chat_message("assistant"):
@@ -346,6 +350,7 @@ def main():
             for i in range(detail):
                 if not responses:
                     #print('initial')
+                    initial_question = task_info + problem_nature + user_query
                     response = get_answer(initial_question, funding_summary)
                     #response = sample_response
                     with st.chat_message("assistant"):
