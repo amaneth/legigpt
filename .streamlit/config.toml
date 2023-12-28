@@ -1,3 +1,4 @@
+
 [logger]
 
 # Level of logging: 'error', 'warning', 'info', or 'debug'.
@@ -12,3 +13,10 @@ level = "error"
 
 # Default: "%(asctime)s %(message)s"
 messageFormat = "%(asctime)s %(message)s"
+
+[theme]
+primaryColor="#008000"
+backgroundColor="#FFFFFF"
+secondaryBackgroundColor="#F0F2F6"
+textColor="#17301C"
+font="sans serif"
