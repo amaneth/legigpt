@@ -1,55 +1,13 @@
 import streamlit as st
+import logging
+# from streamlit_extras.add_vertical_space import add_vertical_space
 import openai
 import os
 import time
-from dotenv import load_dotenv
-
-import pinecone
-from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain.vectorstores import Pinecone
-from langchain.llms import OpenAI
-from langchain.chains.question_answering import load_qa_chain
-from langchain.schema.document import Document
 from langchain.prompts import PromptTemplate
-from langchain.chains import LLMChain,HypotheticalDocumentEmbedder
-from tqdm import tqdm
-import tiktoken
-from io import StringIO
-import re
-import pickle
-from PyPDF2 import PdfReader
-import logging
-logging.basicConfig(level=logging.INFO) 
-import io
-
-load_dotenv()
-# Set your OpenAI API key here
-openai.api_key = st.secrets['OPENAI_API_KEY']
-
-OPENAI_API_KEY =  st.secrets['OPENAI_API_KEY']
-PINECONE_API_KEY = st.secrets["PINECONE_API_KEY"]
-
-
-model_name = 'text-embedding-ada-002'
-
-embed = OpenAIEmbeddings(
-    model=model_name,
-    openai_api_key=OPENAI_API_KEY
-)
-
-
-analysing_model = OpenAI(model_name="gpt-4")
-
-extracting_model = OpenAI(model_name="gpt-4-1106-preview")
-
-qa_chain = load_qa_chain(analysing_model, chain_type="stuff")
-
-pinecone.init(
-    api_key=PINECONE_API_KEY,
-    environment="us-west4-gcp-free"
-)
-
-index_name = "lta-test"
+from dotenv import load_dotenv
+from analysis import Analysis
+# load_dotenv()
 
 
 
@@ -61,186 +19,6 @@ The user may ask related or non-related questions, answer to the following user 
 
 
 
-text_field = "text"
-
-# switch back to normal index for langchain
-index = pinecone.Index(index_name)
-
-vectorstore = Pinecone(
-    index, embed.embed_query, text_field
-)
-
-# Tell tiktoken what model we'd like to use for embeddings
-tiktoken.encoding_for_model('text-embedding-ada-002')
-
-# Intialize a tiktoken tokenizer (i.e. a tool that identifies individual tokens (words))
-#tokenizer = tiktoken.get_encoding('cl100k_base')
-
-def tiktoken_len(text: str) -> int:
-    """
-    Split up a body of text using a custom tokenizer.
-
-    :param text: Text we'd like to tokenize.
-    """
-    tokens = tokenizer.encode(
-        text,
-        disallowed_special=()
-    )
-    return len(tokens)
-
-
-def extract_text_from_pdf(pdf_file_path):
-    text = ""
-    pdf_reader = PdfReader(pdf_file_path)
-    for page in pdf_reader.pages:
-        text += page.extract_text()
-    return text
-
-
-
-def chunk_by_section(document):
-    print('chunking...')
-    text = extract_text_from_pdf(document)
-    # Define a regular expression pattern to match section headers
-    section_pattern = re.compile(r'SEC\.')
-    # Use the pattern to split the content into sections
-    sections = re.split(section_pattern, text)
-
-    # Remove empty strings from the list
-    sections = [section.strip() for section in sections if section.strip()][1:]
-    print(len(sections))
-    selected_sections = [section for section in sections]
-    
-    return selected_sections
-
-
-def chunk_by_size(text: str, size: int = 200) -> list[Document]:
-    """
-    Chunk up text recursively.
-    
-    :param text: Text to be chunked up
-    :return: List of Document items (i.e. chunks).|
-    """
-    text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size = size,
-    chunk_overlap = 20,
-    length_function = tiktoken_len,
-    add_start_index = True,
-)
-    return text_splitter.create_documents([text])
-
-def divide_into_groups(chunks):
-    groups = []
-    start_index = 0
-    group_size = 2  # Initial group size
-
-    while start_index < len(chunks):
-        group = chunks[start_index:start_index + group_size]
-        groups.append(group)
-        start_index += group_size
-        group_size *= 2  # Double the group size for the next iteration
-    
-    last_group = len(groups[-1]) 
-    before_last = len(groups[-2])
-    if last_group < (before_last//2):
-        groups[-2] = groups[-1]+groups[-2]
-        groups = groups[:-1]
-    elif last_group < (before_last):
-        temp = groups[-1]
-        groups[-1] = groups[-2]
-        groups[-2] = temp
-
-    return groups
-
-def merge_with_numbering(texts):
-    merged_text = ""
-
-    for i, text in enumerate(texts, start=1):
-        merged_text += f"{i}. {text}\n"
-
-    return merged_text
-
-def chunk_summary(docs, namespace, depth):
-
-    print('funding summary info extraction in progress...')
-    summary_prompt = PromptTemplate(
-        input_variables = ['chunk'],
-        template = "Extract the funding related information from the following documents. The information will be used to funding analysis and predictions. Documents: {chunk}"
-    )
-
-    chunks = divide_into_groups(docs)
-    chain = LLMChain(llm=extracting_model, prompt=summary_prompt)
-
-    funding_summaries = []
-    for chunk in tqdm(chunks):
-        summary = chain.run(chunk)
-        funding_summaries.append(summary)
-
-    summary = merge_with_numbering(funding_summaries)
-    
-    if depth=='Extensive':
-        with open('summary/'+namespace+'.smry', 'w') as file:
-            file.write(summary)
-
-
-    return summary
-
-
-def get_similiar_docs(vectorstore, query, namespace, k=9, score=False):
-  if score:
-    similar_docs = vectorstore.similarity_search_with_score(query, k=k, namespace=namespace)
-  else:
-    similar_docs = vectorstore.similarity_search(query, k=k, namespace=namespace)
-  return similar_docs
-
-
-def get_answer(query, context):
-  #similar_docs = get_similiar_docs(context)
-  context_doc = Document(page_content=context)
-  answer = qa_chain.run(input_documents=[context_doc], question=query)
-  return answer
-
-
-def get_funding_info(uploaded_file, file_path, namespace, query, depth):
-
-    depth_value = {'Light':14, 'Medium':30, 'Extensive':62}
-    if depth=='Memory':
-        with open(file_path, 'r') as file:
-            funding_summary = file.read()
-        logging.info('summary already in the disk, loaded summary:'+file_path+', size:'+str(len(funding_summary)))
-    else:
-        prompt_template = """Give me funding predictions, Which agencies will be funded.
-        Question: {question}
-        Answer:"""
-
-        prompt = PromptTemplate(input_variables=["question"], template=prompt_template)
-        llm_chain = LLMChain(llm=extracting_model, prompt=prompt)
-        hyde_embed = HypotheticalDocumentEmbedder(llm_chain=llm_chain, base_embeddings=embed)
-        index = pinecone.Index(index_name)
-
-        if namespace not in index.describe_index_stats()['namespaces']:
-            pdf_file = io.BytesIO(uploaded_file.getvalue())
-            # pdf_reader = PdfReader(pdf_file)
-            #stringio = StringIO(uploaded_file.getvalue().decode("latin-1"))
-            #leg_text = uploaded_file.getvalue().decode("utf-8", errors='ignore')
-            #sections = chunk_by_section('../data/'+file_name)
-            sections = chunk_by_section(pdf_file)
-
-            #logging.info('length of sections selcted:'+str(len(sections))+' '+sections[0])
-
-
-            vectorstore = Pinecone.from_texts(sections, hyde_embed, index_name=index_name, namespace=namespace)
-
-        else:
-            vectorstore = Pinecone(index, hyde_embed.embed_query, text_field)
-
-        #similar_query = 'Give me a funding prediction and analysis for various health related agencies' 
-        print('Doing analysis with:'+depth)
-        similar_docs = get_similiar_docs(vectorstore, query, namespace, k=depth_value[depth])
-        funding_summary = chunk_summary(similar_docs, namespace, depth)
-
-    return funding_summary
-
 def main():
     '''    st.set_page_config(
          page_title="Visit Recognition",
@@ -249,25 +27,238 @@ def main():
          initial_sidebar_state="expanded",
     )
     #st.set_page_config(page_title="Visit Recognition", layout="wide")'''
+    st.set_page_config(layout="wide")
     padding_top =0
-    st.markdown(f"""
-    <style>
-    .reportview-container .main .block-container{{
-        padding-top: {padding_top}rem;
-    }}
-    h1{{
-        text-align: center;
-    }}
-    </style>
-    """, unsafe_allow_html=True)
+    # st.markdown(f"""
+    # <style>
+    # .reportview-container .main .block-container{{
+    #     padding-top: {padding_top}rem;
+    # }}
+    # h1{{
+    #     text-align: center;
+    # }}
+    # </style>
+    # """, unsafe_allow_html=True)
 
-    st.markdown("# LegiGPT⚖️ ")
+    st.markdown('''
+    <style>
+    @import url('https://fonts.googleapis.com/css?family=Heebo'); 
+    @import url('https://fonts.googleapis.com/css?family=Heebo:400,600,800,900');  
+
+    body * { 
+        -webkit-font-smoothing: subpixel-antialiased !important; 
+        text-rendering:optimizeLegibility !important;
+    }
+
+    body hr {
+        border-bottom: 1.5px solid rgba(23, 48, 28, 0.5); 
+    }
+
+    div[data-testid="stToolbarActions"] {
+        visibility:hidden;
+    }
+
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+
+    div[data-baseweb="tab-panel"] {
+        padding-top: 2rem;
+    }
+
+    div.stButton > button:first-child {
+        width: 200px;
+        background-color: rgba(23, 48, 28, 0.95) ;
+        color: #F6F4F0; 
+    }
+    div.stButton p {
+        font-family: "Heebo";
+        font-weight:600;
+        font-size: 15px;
+        letter-spacing: 0.25px;
+        padding-top: 1px;
+    }
+
+    div.stLinkButton > a:first-child {
+        width: 125px;
+        background-color: rgba(23, 48, 28, 0.95) ;
+        font-family: "Heebo" !important;
+        letter-spacing: 0.25px;
+        
+    }
+    div.stLinkButton p {
+        font-size: 15px !important;
+        color: #F6F4F0;
+        font-family: "Heebo" !important;
+        font-weight: 600;
+    }
+    section[data-testid="stSidebar"] {
+        top: 5rem;
+        width: 200px !important; 
+        background-color:#CDD4D0;
+        background: #F6F4F0;
+        border-right: 1.5px solid rgba(23, 48, 28, 0.5);
+    }
+    div[data-testid="collapsedControl"] {
+        top:5.15rem;
+    }
+    div[data-testid="stExpander"] {
+        background-color: rgba(247, 250, 248, 0.45) ;
+        background: transparent;
+        border: 0px solid black;
+    }
+    .st-emotion-cache-yf5hy5 p:nth-child(1) {
+        font-size: 16px;
+        color: green;
+        font-family: "Georgia";
+    }
+    .st-emotion-cache-yf5hy5 p:nth-child(2) {
+        font-size: 2.25rem;
+        font-weight: 800;
+        font-family: 'Heebo';
+        line-height:1.15;
+        letter-spacing: 0.25px;
+        margin: 10px 0 0 0;
+    }
+    header[data-testid="stHeader"] {
+        background: url('https://res.cloudinary.com/djjxmauw3/image/upload/v1703595540/aslc1b6vxklzjptc9dfd.png');
+        background-size: contain ;
+        background-repeat: no-repeat;
+        background-color:rgb(23, 48, 28);
+        height: 5rem;
+    }
+
+    div[data-testid="stAppViewContainer"] > section:nth-child(2) {
+        overflow-x: hidden;
+    }
+    .st-emotion-cache-uf99v8 {
+        overflow-x: hidden;
+    }
+
+    .appview-container > section:nth-child(2) > div:nth-child(1) {
+        padding: 4.5rem 0.5rem 0rem 1rem;
+    }
+    .appview-container > section:nth-child(1) > div:nth-child(1) > div:nth-child(2) {
+        padding: 1rem 1.5rem 1.5rem 1.5rem;
+    }
+    .st-dn {
+        background-color: transparent;
+    }
+
+
+    div[data-testid="textInputRootElement"] {
+        border: 1px solid rgba(23, 48, 28, 0.95);
+    }
+    div[data-testid="stForm"] {
+        border: 0px;
+        padding:0;
+    }
+    div[data-testid="stExpanderDetails"] p {
+        font-family:'Georgia';
+        font-size: 18px;
+    }
+    div[data-testid="StyledLinkIconContainer"] {
+        font-weight: 900;
+        font-family:'Heebo';
+        font-size: 2.5rem;
+        letter-spacing: 0.25px;
+    }
+
+    div[data-testid="stExpander"] > details {
+        bordder-radius: 0;
+        border-color: rgba(255, 255, 255, 0.05);
+    }
+    div[data-baseweb="tab-panel"] > div:nth-child(1) > div:nth-child(1) {
+        gap: 0.5rem;
+    }
+
+    div[data-testid="stExpander"] > details > summary:hover {
+        color: rgb(23, 48, 28);
+    }
     
-    options = ( 'Light', 'Medium', 'Extensive')
+    div[data-baseweb="select"] {
+        font-family: "Heebo";
+        font-weight:600;
+        font-size: 15px;
+        letter-spacing: 0.25px;
+    }
+
+    ul[data-testid="stVirtualDropdown"] li {
+        text-align: center;
+        font-family: "Heebo";
+    }
+    ul[data-testid="stVirtualDropdown"] li:hover {
+        color: rgba(23, 48, 28, 0.95);
+        background-color:#B3BCB4;
+    }
+
+    div[data-baseweb="select"] > div:first-child > div > div:first-child {
+        padding-left: 48px;
+        color: #F6F4F0;
+        padding-top: 1px;
+        
+    }
+
+    div[data-baseweb="select"] div {
+        background-color: rgba(23, 48, 28, 0.95);
+        color: #F6F4F0;
+        border: 0px;
+    }
+    div[data-baseweb="popover"] .st-dk {
+        background-color: rgba(23, 48, 28, 0.95);
+    }
+    div[data-baseweb="popover"] li {
+        color: #F6F4F0;
+        background-color: rgba(23, 48, 28, 0.95);
+    }
+    div[data-baseweb="popover"]  .st-emotion-cache-35i14j {
+        background: #B3BCB4;
+        color: rgba(23, 48, 28, 0.95) !important;
+    }
+
+
+    div[data-baseweb="select"] svg {
+        color: #F6F4F0;
+    }
+
+    div[data-testid="stForm"] .st-dk {
+        background-color: #DFE3E0;
+    }
+
+    div[data-testid="stCaptionContainer"] {
+        margin-bottom: -1.75rem;
+    }
+
+    </style>
+    ''', unsafe_allow_html=True)
+
+
+
+
+
+    # st.markdown("# LegiGPT⚖️ ")
+    # gen_analysis = False
+    
+    options = ( 'Extensive', 'Medium', 'Light' )
+    gen_analysis = False
+    
     with st.sidebar:
-        uploaded_file = st.file_uploader("Choose a PDF file", type="pdf", accept_multiple_files=False)
-        selectbox_placeholder = st.empty()
-        depth = selectbox_placeholder.selectbox('Choose depth of analysis', options)
+        st.sidebar.header("Document")
+        document_name = st.text_input(label="",placeholder='name of the document', label_visibility="collapsed", key="text")
+        uploaded_file = st.file_uploader("Upload the document", label_visibility="collapsed", type="pdf", accept_multiple_files=False)
+
+        st.sidebar.header("Analysis")
+        analysis_selectbox_placeholder = st.empty()
+        analysis_option = analysis_selectbox_placeholder.selectbox(label='select', label_visibility= "collapsed", options=('Generate', 'Chat'))
+        depth_selectbox_placeholder = st.empty()
+        depth = depth_selectbox_placeholder.selectbox(label='select', label_visibility= "collapsed", options=options)
+       
+
+        
+        if analysis_option == 'Generate' and st.sidebar.button(' 📝 Generate analysis', use_container_width = True, disabled = not uploaded_file or not document_name):
+            gen_analysis = True
+
+    
+        
 
 
     #st.title("LegiGPT")
@@ -276,15 +267,16 @@ def main():
         st.session_state["messages"] = [{"role": "assistant", "content": "Hello! How may I assist you today with funding predictions, analysis, and insights?"}] 
 
     # Display chat messages from history on app rerun
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+    # if analysis=='Chat':
+    #     for message in st.session_state.messages:
+    #         with st.chat_message(message["role"]):
+    #             st.markdown(message["content"])
 
     funding_summary = None
     
     folder_name = 'summary'
 
-    analysis_prompt_template = """You are giving funding predictions for various agencies, insights and analysis on the funding-related 
+    analysis_prompt_template = """You are giving funding predictions for various agencies and programs and insights and analysis on the funding-related 
     entities and trends based on the documents provided.
     The documents include information on government agency budgets, 
     grant allocations, and financial reports. Answer the following question:{question}
@@ -293,11 +285,6 @@ def main():
     """
     analysis_prompt = PromptTemplate(input_variables=["question","previous"], template=analysis_prompt_template)
     detail = 3
-    
-    question_prompt_template = """Q: {question}
-    classify the question either specific or broad. only respond either 'broad' or 'specific' only"""
-
-    question_prompt = PromptTemplate(input_variables=["question"], template=question_prompt_template)
 
 
 
@@ -306,80 +293,140 @@ def main():
         st.session_state.messages = []
         file_name = uploaded_file.name
         namespace = file_name.split('.')[0]
-        file_path = os.path.join(folder_name, namespace+'.smry')
-        logging.info(namespace+'-'+file_name)
+        if analysis_option=='Chat':
+            file_path = os.path.join(folder_name, namespace+'.smry')
+            logging.info(namespace+'-'+file_name)
 
-        if os.path.isfile(file_path):
-            options = ('Memory', 'Light', 'Medium', 'Extensive')    
-            depth = selectbox_placeholder.selectbox('Choose depth of analysis', options)
+            if os.path.isfile(file_path):
+                options = ('Memory', 'Light', 'Medium', 'Extensive')    
+                depth = depth_selectbox_placeholder.selectbox(label='select', label_visibility= "collapsed", options=options)
+        else:
+            sections = ['intro', 'provisions', 'states']
+            section_paths = [os.path.join(folder_name, namespace+'-'+section+'.smry') for section in sections]
+            summary_exist = [os.path.isfile(file_path) for file_path in section_paths]
+            if any(summary_exist):
+                print('summary exists')
+                options = ('Memory', 'Light', 'Medium', 'Extensive')    
+                depth = depth_selectbox_placeholder.selectbox('Choose depth of analysis', options)
+
+
+
         #uploaded_file = None
         #funding_summary = funding_summary_sample
 
     else:
         logging.info('upload file is none')
 
-    # React to user input
-    if user_query := st.chat_input("What is up?", disabled = not uploaded_file) :
-        # Display user message in chat message container
-        logging.info(user_query)
-        st.chat_message("user").markdown(user_query)
-        # Add user message to chat history
-        st.session_state.messages.append({"role": "user", "content": user_query})
+    
+    analysis = Analysis()
 
-        funding_summary = get_funding_info(uploaded_file, file_path, namespace, user_query, depth) 
 
-        problem_nature = 'Due to the extensive nature of the information, the response you will give here will be just the first part, \
-         you\'ll continue from where you left off in the next response '
-        
-
-        question_type = analysing_model(question_prompt.format(question=user_query)).lower() 
-
-        logging.info("The Question type is:"+question_type)
-
-        sample_response = 'SAMPLE RESPONSE'
-
-        if question_type == 'specific':
-            input_prompt = task_info + user_query
-            final_response = get_answer(input_prompt, funding_summary)
-            #final_response = sample_response
-            with st.chat_message("assistant"):
-                st.markdown(final_response)
-
+    if analysis_option == 'Generate':
+        st.markdown(f"<h1 style='text-align: center; color: black; font-size: 64px;'>{document_name}</h1>", unsafe_allow_html=True)
+        if not gen_analysis:
+            st.markdown('Generating a comphrensive analysis can take a while :)')
         else:
-            responses = []
-            for i in range(detail):
-                if not responses:
-                    #print('initial')
-                    initial_question = task_info + problem_nature + user_query
-                    response = get_answer(initial_question, funding_summary)
-                    #response = sample_response
-                    with st.chat_message("assistant"):
-                        st.markdown(response)
-                else:
-                    previous_response='\n'.join(responses)
-                    input_prompt = analysis_prompt.format(question=user_query, previous=previous_response)
-                    #print(input_prompt)
-                    st.write('loading...')
-                    #time.sleep(5)
-                    response = get_answer(input_prompt, funding_summary)
-                    #response = sample_response+'-'+str(i)
-                    st.markdown(response)
+            comprhensive_analysis = analysis.generate_analysis(document_name, uploaded_file, depth, sample={'intro':False, 'states': False, 'provisions': False, 'fiscal': False, 'random':False})
 
-                responses.append(response)
+            intro_response = comprhensive_analysis['intro']
+            states_response = comprhensive_analysis['states']
+            provisions_response = comprhensive_analysis['provisions']
+            fiscal_response = comprhensive_analysis['fiscal']
+            random_response = comprhensive_analysis['random']
 
-            final_response = '\n'.join(responses)
+            col1, col2 = st.columns([0.5,0.5])
+            with col1:
+                row1_spacer1, row1_1, row1_spacer2 = st.columns((0.001, 0.9, 0.001))
+                with row1_1:
+                    # add_vertical_space()
+                    st.markdown(intro_response)
 
-        st.session_state.messages.append({"role": "assistant", "content": final_response})
+                section1_spacer1, section1_1, section1_spacer2 = st.columns((0.001, 0.9, 0.001))
+
+                with section1_1:
+                    st.header('Spending Provisions')
+                    for response in provisions_response:
+                            st.subheader(response['agency'])
+                            st.markdown(response['analysis'])
+                            
+
+
+                section2_spacer1, section2, section2_spacer2 = st.columns((0.001, 0.9, 0.001))
+
+                with section2:
+                    st.header('Funding distribution across states')
+                    st.markdown(states_response)
+
+                section3_spacer1, section3, section3_spacer3 = st.columns((0.001, 0.9, 0.001))
+
+                with section3:
+                    st.header('Funding Allocation Across Diverse Fiscal Years')
+                    st.markdown(fiscal_response)
+
+                
+            
+            with col2:
+                section4_spacer1, section4_1, section4_spacer2 = st.columns((0.001, 0.9, 0.001))
+                with section4_1:
+                    for topics in random_response:
+                        for topic, topic_analysis in topics.items():
+                                st.header(topic)
+                                st.markdown(topic_analysis)
+
+
 
     else:
-        logging.info('funding summary is None')
+    # React to user input
+        if user_query := st.chat_input("What is up?", disabled = not uploaded_file) :
+            # Display user message in chat message container
+            logging.info(user_query)
+            st.chat_message("user").markdown(user_query)
+            # Add user message to chat history
+            st.session_state.messages.append({"role": "user", "content": user_query})
 
-    #    if user_query:
-            #st.text("ChatGPT:")
-          
+            funding_summary = analysis.get_funding_info(uploaded_file, file_path, namespace, user_query, depth) 
+
+            problem_nature = 'Due to the extensive nature of the information, the response you will give here will be just the first part, \
+            you\'ll continue from where you left off in the next response '
             
-            #print(response)
-    #       st.write(sample_response)
+
+            question_type = analysis.classify_question(user_query)
+
+            logging.info("The Question type is:"+question_type)
+
+
+            if question_type == 'specific':
+                input_prompt = task_info + user_query
+                final_response = analysis.get_answer(input_prompt, funding_summary)
+                #final_response = sample_response
+                with st.chat_message("assistant"):
+                    st.markdown(final_response)
+
+            else:
+                responses = []
+                for i in range(detail):
+                    if not responses:
+                        #print('initial')
+                        initial_question = task_info + problem_nature + user_query
+                        response = analysis.get_answer(initial_question, funding_summary)
+                        with st.chat_message("assistant"):
+                            st.markdown(response)
+                    else:
+                        previous_response='\n'.join(responses)
+                        input_prompt = analysis_prompt.format(question=user_query, previous=previous_response)
+                        st.write('loading...')
+                        response = analysis.get_answer(input_prompt, funding_summary)
+                        st.markdown(response)
+
+                    responses.append(response)
+
+                final_response = '\n'.join(responses)
+
+            st.session_state.messages.append({"role": "assistant", "content": final_response})
+
+        else:
+            logging.info('funding summary is None')
+
 
 if __name__ == "__main__":
     main()

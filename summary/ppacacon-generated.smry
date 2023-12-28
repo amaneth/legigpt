@@ -1,0 +1,7 @@
+response = [{"topic":"Evaluating Effectiveness of Funded Programs", "description":"Examining the impact and effectiveness of funded programs in meeting their stated goals."},
+            {"topic":"Role of Authorization and Appropriation", "description":"Discussing the importance and role of authorization and appropriation in funding."},
+            {"topic":"Funding Transparency and Reporting", "description":"A deep dive into the reporting requirements tied to funding, implications on transparency, and impact on future funding strategies."},
+            {"topic":"Future Predictions and Trends in Funding", "description":"Projecting future trends in funding based on past and current allocations."},
+            {"topic":"Variations in Funding - Chronic Diseases vs Preventive Measures", "description":"Analyzing the allocation of funds between chronic disease treatment and prevention/wellness programs."},
+            {"topic":"Fraud, Waste, and Abuse - Impact on Funding", "description":"Assessing the volume of funding allocated to counteract fraud, waste, and abuse within health programs."},
+            {"topic":"Impact of Funding on Health Workforce Development", "description":"Exploring how funding is targeted at workforce development in the health sector and its effects."}]
