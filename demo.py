@@ -294,7 +294,7 @@ def main():
         file_name = uploaded_file.name
         namespace = file_name.split('.')[0]
         if analysis_option=='Chat':
-            file_path = os.path.join(folder_name, namespace+'.smry')
+            file_path = os.path.join(folder_name, namespace+'-default.smry')
             logging.info(namespace+'-'+file_name)
 
             if os.path.isfile(file_path):
@@ -384,7 +384,7 @@ def main():
             # Add user message to chat history
             st.session_state.messages.append({"role": "user", "content": user_query})
 
-            funding_summary = analysis.get_funding_info(uploaded_file, file_path, namespace, user_query, depth) 
+            funding_summary = analysis.get_funding_info(uploaded_file, "default", namespace, user_query, depth) 
 
             problem_nature = 'Due to the extensive nature of the information, the response you will give here will be just the first part, \
             you\'ll continue from where you left off in the next response '
